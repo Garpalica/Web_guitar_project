@@ -56,6 +56,15 @@ class Song(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     author = db.relationship('User', backref=db.backref('songs', lazy=True))
 
+class Comment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    song_id = db.Column(db.Integer, db.ForeignKey('song.id'), nullable=False)
+    text = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    author = db.relationship('User', backref=db.backref('comments', lazy=True))
+    song = db.relationship('Song', backref=db.backref('comments', lazy=True, cascade="all, delete-orphan"))
+
 class Register(Resource):
     def post(self):
         data = request.get_json()
@@ -151,6 +160,42 @@ class SongResource(Resource):
             db.session.commit()
             return {'message': 'Deleted'}, 200
         return {'message': 'Error'}, 403
+class CommentResource(Resource):
+    def get(self):
+        song_id = request.args.get('song_id')
+        comments = Comment.query.filter_by(song_id=song_id).order_by(Comment.created_at.desc()).all()
+        return {'comments': [{
+            'id': c.id,
+            'text': c.text,
+            'user_id': c.user_id,
+            'author_name': c.author.first_name,
+            'date': c.created_at.strftime('%Y-%m-%d %H:%M')
+        } for c in comments]}, 200
+
+    @jwt_required()
+    def post(self):
+        data = request.get_json()
+        user_id = int(get_jwt_identity())
+        comment = Comment(
+            user_id=user_id,
+            song_id=data['song_id'],
+            text=data['text']
+        )
+        db.session.add(comment)
+        db.session.commit()
+        return {'message': 'Comment added'}, 201
+
+    @jwt_required()
+    def delete(self):
+        data = request.get_json()
+        comment = Comment.query.get(data['id'])
+        if comment and comment.user_id == int(get_jwt_identity()):
+            db.session.delete(comment)
+            db.session.commit()
+            return {'message': 'Deleted'}, 200
+        return {'message': 'Access denied'}, 403
+
+api.add_resource(CommentResource, '/api/comments')
 
 api.add_resource(SongResource, '/api/songs', '/api/songs/<int:song_id>')
 
