@@ -46,6 +46,16 @@ class User(db.Model):
     password = db.Column(db.String(255))
     date = db.Column(db.DateTime, default=datetime.utcnow)
 
+class Song(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    title = db.Column(db.String(100), nullable=False)
+    artist = db.Column(db.String(100), nullable=False)
+    text_with_chords = db.Column(db.Text, nullable=False)
+    tonality = db.Column(db.String(10)) 
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    author = db.relationship('User', backref=db.backref('songs', lazy=True))
+
 class Register(Resource):
     def post(self):
         data = request.get_json()
@@ -92,6 +102,57 @@ class Logout(Resource):
         resp = make_response(jsonify({'message': 'Выход выполнен'}), 200)
         unset_jwt_cookies(resp)
         return resp
+    
+class SongResource(Resource):
+    def get(self, song_id=None):
+        if song_id is None:
+            songs = Song.query.all()
+            return {'songs': [{
+                'id': s.id,
+                'title': s.title,
+                'artist': s.artist,
+                'tonality': s.tonality,
+                'added_by': s.author.first_name if s.author else "Unknown"
+            } for s in songs]}, 200
+        
+        s = Song.query.get(song_id)
+        if not s: return {'message': 'Not found'}, 404
+        return {
+            'id': s.id,
+            'title': s.title,
+            'artist': s.artist,
+            'text_with_chords': s.text_with_chords,
+            'tonality': s.tonality,
+            'added_by_id': s.user_id,
+            'added_by': s.author.first_name
+        }, 200
+
+    @jwt_required()
+    def post(self):
+        data = request.get_json()
+        user_id = int(get_jwt_identity())
+        new_song = Song(
+            user_id=user_id,
+            title=data['title'],
+            artist=data['artist'],
+            text_with_chords=data['text_with_chords'],
+            tonality=data.get('tonality', '')
+        )
+        db.session.add(new_song)
+        db.session.commit()
+        return {'message': 'Song added'}, 201
+
+    @jwt_required()
+    def delete(self):
+        data = request.get_json()
+        song = Song.query.get(data['id'])
+        if song and song.user_id == int(get_jwt_identity()):
+            db.session.delete(song)
+            db.session.commit()
+            return {'message': 'Deleted'}, 200
+        return {'message': 'Error'}, 403
+
+api.add_resource(SongResource, '/api/songs', '/api/songs/<int:song_id>')
 
 api.add_resource(Register, '/api/register')
 api.add_resource(Login, '/api/login')
