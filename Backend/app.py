@@ -53,6 +53,8 @@ class Song(db.Model):
     artist = db.Column(db.String(100), nullable=False)
     text_with_chords = db.Column(db.Text, nullable=False)
     tonality = db.Column(db.String(10)) 
+    genre = db.Column(db.String(50))
+    strumming_pattern = db.Column(db.String(50))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     author = db.relationship('User', backref=db.backref('songs', lazy=True))
 
@@ -121,6 +123,8 @@ class SongResource(Resource):
                 'title': s.title,
                 'artist': s.artist,
                 'tonality': s.tonality,
+                'genre': s.genre,
+                'strumming_pattern': s.strumming_pattern,
                 'added_by': s.author.first_name if s.author else "Unknown"
             } for s in songs]}, 200
         
@@ -132,6 +136,8 @@ class SongResource(Resource):
             'artist': s.artist,
             'text_with_chords': s.text_with_chords,
             'tonality': s.tonality,
+            'genre': s.genre,
+            'strumming_pattern': s.strumming_pattern,
             'added_by_id': s.user_id,
             'added_by': s.author.first_name
         }, 200
@@ -145,11 +151,28 @@ class SongResource(Resource):
             title=data['title'],
             artist=data['artist'],
             text_with_chords=data['text_with_chords'],
-            tonality=data.get('tonality', '')
+            tonality=data.get('tonality', ''),
+            genre=data.get('genre', 'Не указан'),
+            strumming_pattern=data.get('strumming_pattern', 'Не указан')
         )
         db.session.add(new_song)
         db.session.commit()
         return {'message': 'Song added'}, 201
+    
+    @jwt_required()
+    def put(self):
+        data = request.get_json()
+        song = Song.query.get(data['id'])
+        if song and song.user_id == int(get_jwt_identity()):
+            song.title = data.get('title', song.title)
+            song.artist = data.get('artist', song.artist)
+            song.text_with_chords = data.get('text_with_chords', song.text_with_chords)
+            song.tonality = data.get('tonality', song.tonality)
+            song.genre = data.get('genre', song.genre)
+            song.strumming_pattern = data.get('strumming_pattern', song.strumming_pattern)
+            db.session.commit()
+            return {'message': 'Updated'}, 200
+        return {'message': 'Error'}, 403
 
     @jwt_required()
     def delete(self):
