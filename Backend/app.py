@@ -218,6 +218,19 @@ class CommentResource(Resource):
             return {'message': 'Deleted'}, 200
         return {'message': 'Access denied'}, 403
 
+class Refresh(Resource):
+    @jwt_required(refresh=True)
+    def post(self):
+        try:
+            user_id = get_jwt_identity()
+            new_access_token = create_access_token(identity=user_id)
+            resp = make_response(jsonify({'message': 'Token refreshed'}), 200)
+            set_access_cookies(resp, new_access_token)
+            return resp
+        except:
+            return {'message': 'Error'}, 401
+
+api.add_resource(Refresh, '/api/refresh')
 api.add_resource(CommentResource, '/api/comments')
 
 api.add_resource(SongResource, '/api/songs', '/api/songs/<int:song_id>')
