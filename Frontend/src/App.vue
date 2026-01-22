@@ -1,3 +1,47 @@
+<template>
+  <div class="app-container">
+    <Header
+      :user_name="user_name"
+      @emit_show_main_page="Show_song_list"
+      @emit_show_login_page="show = 'login_page'"
+      @emit_show_register_page="show = 'register_page'"
+      @emit_show_add_song="show = 'add_song_page'"
+      @emit_logout="Logout"
+    ></Header>
+
+    <SongList
+      v-show="show == 'song_list'"
+      ref="Load_list"
+      @emit_show_one_song="Show_Detail"
+    ></SongList>
+
+    <SongDetail
+      v-show="show == 'detail_page'"
+      :song_data="current_song"
+      :user_name="user_name"
+      :user_id="user_id"
+      @emit_back_to_list="Show_song_list"
+    ></SongDetail>
+
+    <AddSong
+      v-show="show == 'add_song_page'"
+      @emit_back_to_list="Show_song_list"
+    ></AddSong>
+
+    <Login
+      v-show="show == 'login_page'"
+      @emit_login_success="Data_user"
+      @emit_to_register="show = 'register_page'"
+    ></Login>
+
+    <Register
+      v-show="show == 'register_page'"
+      @emit_register_success="show = 'login_page'"
+      @emit_to_login="show = 'login_page'"
+    ></Register>
+  </div>
+</template>
+
 <script>
 import SongList from "./views/SongList.vue";
 import SongDetail from "./views/SongDetail.vue";

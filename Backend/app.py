@@ -207,7 +207,27 @@ class CommentResource(Resource):
         db.session.add(comment)
         db.session.commit()
         return {'message': 'Comment added'}, 201
-
+    @jwt_required()
+    def put(self):
+        data = request.get_json()
+        comment_id = data.get('id')
+        user_id = int(get_jwt_identity())
+        
+        comment = Comment.query.get(comment_id)
+        if not comment:
+            return {'message': 'Комментарий не найден'}, 404
+            
+        if comment.user_id != user_id:
+            return {'message': 'Вы не можете редактировать чужой комментарий'}, 403
+            
+        comment.text = data.get('text')
+        try:
+            db.session.commit()
+            return {'message': 'Комментарий обновлен'}, 200
+        except Exception as e:
+            db.session.rollback()
+            return {'message': 'Ошибка обновления', 'error': str(e)}, 500
+        
     @jwt_required()
     def delete(self):
         data = request.get_json()
