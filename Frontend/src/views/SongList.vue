@@ -9,6 +9,9 @@
         <button class="text_button" @click="Sort_songs('old')">
           Сначала старые
         </button>
+        <button class="text_button" @click="Sort_songs('popular')">
+          Популярные
+        </button>
       </div>
     </div>
     <div class="filters-panel">
@@ -18,7 +21,7 @@
           type="search"
           v-model="filters.search"
           @input="ApplyFilters"
-          placeholder="🔍 Поиск по названию или исполнителю..."
+          placeholder="Поиск по названию или исполнителю..."
           name="search_unq_random_field"
           autocomplete="off"
         />
@@ -52,6 +55,23 @@
         <p class="artist-line">
           Исполнитель: <b>{{ el.artist }}</b>
         </p>
+
+        <div class="rating_block">
+          <span class="rating_text">Оценка: {{ el.rating || 0 }}</span>
+          <div class="stars_row">
+            <span
+              v-for="star in 5"
+              :key="star"
+              class="star_icon"
+              :class="{ filled: star <= Math.round(el.rating || 0) }"
+              @click="Rate_song(el.id, star)"
+              title="Поставить оценку"
+            >
+              ★
+            </span>
+          </div>
+        </div>
+
         <div class="tags-row">
           <span class="info-tag">{{ el.tonality }}</span>
           <span class="info-tag">{{ el.strumming_pattern }}</span>
@@ -69,7 +89,7 @@
 </template>
 
 <script>
-import { Axios_Get } from "../index.js";
+import { Axios_Get, Axios_Post } from "../index.js";
 import { TONALITIES, GENRES, STRUMMING_PATTERNS } from "../constants.js";
 
 export default {
@@ -97,10 +117,29 @@ export default {
         console.log(e);
       }
     },
-    Sort_songs(type) {
-      if (type === "new") this.list_songs.sort((a, b) => b.id - a.id);
-      else this.list_songs.sort((a, b) => a.id - b.id);
+
+    async Rate_song(song_id, value) {
+      try {
+        await Axios_Post("/rate", {
+          song_id: song_id,
+          value: value,
+        });
+        await this.Get_songs();
+      } catch (e) {
+        alert("Чтобы голосовать, нужно войти в аккаунт!");
+      }
     },
+
+    Sort_songs(type) {
+      if (type === "new") {
+        this.list_songs.sort((a, b) => b.id - a.id);
+      } else if (type === "old") {
+        this.list_songs.sort((a, b) => a.id - b.id);
+      } else if (type === "popular") {
+        this.list_songs.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+      }
+    },
+
     ApplyFilters() {
       let result = this.original_full_songs;
       if (this.filters.search) {
@@ -185,14 +224,13 @@ select {
 }
 .list_songs {
   margin-top: 20px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 20px;
   width: 100%;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
 }
 .song_card {
   background-color: white;
-  flex: 1 1 300px;
   border: 1px solid #ddd;
   border-radius: 15px;
   padding: 20px;
@@ -227,6 +265,31 @@ select {
   white-space: nowrap;
   margin-left: 5px;
   height: fit-content;
+}
+.rating_block {
+  margin: 5px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.stars_row {
+  font-size: 24px;
+  cursor: pointer;
+}
+.star_icon {
+  color: #ccc;
+  transition: color 0.2s;
+}
+.star_icon.filled {
+  color: #ffc107;
+}
+.star_icon:hover {
+  color: #ffdb70;
+}
+.rating_text {
+  font-size: 0.9em;
+  font-weight: bold;
+  color: #555;
 }
 .tags-row {
   display: flex;
@@ -264,5 +327,16 @@ select {
   cursor: pointer;
   font-weight: bold;
   width: 100%;
+}
+@media (max-width: 1100px) {
+  .list_songs {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 700px) {
+  .list_songs {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

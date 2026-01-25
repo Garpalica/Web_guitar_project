@@ -11,7 +11,7 @@ from flask_jwt_extended import (
 from flask_cors import CORS 
 
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": "http://localhost:5173"}}, supports_credentials=True)
+CORS(app, resources={r"/api/*": {"origins": ["http://localhost:5173"]}}, supports_credentials=True)
 
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///guitar_base.db'
 app.config['JWT_SECRET_KEY'] = '834g93gb9ug34u9njscd234kmpiq3jipwuo3v55vu94fpi53foqfm3ipw7vu959uw'
@@ -44,6 +44,7 @@ class User(db.Model):
     last_name = db.Column(db.String(50))
     email = db.Column(db.String(120), unique=True)
     password = db.Column(db.String(255))
+    role = db.Column(db.String(20), default='user')
     date = db.Column(db.DateTime, default=datetime.utcnow)
 
 class Song(db.Model):
@@ -67,17 +68,29 @@ class Comment(db.Model):
     author = db.relationship('User', backref=db.backref('comments', lazy=True))
     song = db.relationship('Song', backref=db.backref('comments', lazy=True, cascade="all, delete-orphan"))
 
+class Rating(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    song_id = db.Column(db.Integer, db.ForeignKey('song.id'), nullable=False)
+    value = db.Column(db.Integer, nullable=False)
+    __table_args__ = (db.UniqueConstraint('user_id', 'song_id', name='unique_user_song_rating'),)
+
+
 class Register(Resource):
     def post(self):
         data = request.get_json()
         if User.query.filter_by(email=data['email']).first():
             return {'message': 'Пользователь уже существует'}, 400
         
+        role = 'user'
+        if data['email'] == 'admin@admin.com':
+            role = 'admin'
         new_user = User(
             first_name=data['first_name'],
             last_name=data.get('last_name', ''),
             email=data['email'],
-            password=generate_password_hash(data['password'])
+            password=generate_password_hash(data['password']),
+            role=role
         )
         try:
             db.session.add(new_user)
@@ -90,19 +103,21 @@ class Login(Resource):
     def post(self):
         data = request.get_json()
         user = User.query.filter_by(email=data['email']).first()
-        if user and check_password_hash(user.password, data['password']):
-            access_token = create_access_token(identity=str(user.id))
-            refresh_token = create_refresh_token(identity=str(user.id))
-            
-            resp = make_response(jsonify({
-                'message': 'Вход выполнен',
-                'user_id': user.id,
-                'first_name': user.first_name
-            }), 200)
-            set_access_cookies(resp, access_token)
-            set_refresh_cookies(resp, refresh_token)
-            return resp
-        return {'message': 'Неверные данные'}, 401
+        if not user:
+            return {'message': 'Такого аккаунта не существует'}, 401
+        if not check_password_hash(user.password, data['password']):
+            return {'message': 'Неверный пароль'}, 401
+        access_token = create_access_token(identity=str(user.id))
+        refresh_token = create_refresh_token(identity=str(user.id))
+        resp = make_response(jsonify({
+            'message': 'Вход выполнен',
+            'user_id': user.id,
+            'first_name': user.first_name,
+            'role': user.role
+        }), 200)
+        set_access_cookies(resp, access_token)
+        set_refresh_cookies(resp, refresh_token)
+        return resp
 
 class Logout(Resource):
     @jwt_required(refresh=True)
@@ -116,31 +131,54 @@ class Logout(Resource):
     
 class SongResource(Resource):
     def get(self, song_id=None):
-        if song_id is None:
-            songs = Song.query.all()
-            return {'songs': [{
+        if song_id:
+            s = Song.query.get(song_id)
+            if not s: return {'message': 'Not found'}, 404
+            ratings = Rating.query.filter_by(song_id=s.id).all()
+            if ratings:
+                avg = sum(r.value for r in ratings) / len(ratings)
+            else:
+                avg = 0
+            return {
+                'id': s.id,
+                'title': s.title,
+                'artist': s.artist,
+                'text_with_chords': s.text_with_chords,
+                'tonality': s.tonality,
+                'genre': s.genre,
+                'strumming_pattern': s.strumming_pattern,
+                'added_by_id': s.user_id,
+                'added_by': s.author.first_name,
+                'rating': round(avg, 1)
+            }, 200
+        songs_query = Song.query.all()
+        songs_list = []
+        
+        for s in songs_query:
+            ratings = Rating.query.filter_by(song_id=s.id).all()
+            if ratings:
+                avg = sum(r.value for r in ratings) / len(ratings)
+            else:
+                avg = 0
+            
+            songs_list.append({
                 'id': s.id,
                 'title': s.title,
                 'artist': s.artist,
                 'tonality': s.tonality,
                 'genre': s.genre,
                 'strumming_pattern': s.strumming_pattern,
-                'added_by': s.author.first_name if s.author else "Unknown"
-            } for s in songs]}, 200
+                'added_by': s.author.first_name if s.author else "Unknown",
+                'rating': round(avg, 1)
+            })
+        sort_by = request.args.get('sort_by')
         
-        s = Song.query.get(song_id)
-        if not s: return {'message': 'Not found'}, 404
-        return {
-            'id': s.id,
-            'title': s.title,
-            'artist': s.artist,
-            'text_with_chords': s.text_with_chords,
-            'tonality': s.tonality,
-            'genre': s.genre,
-            'strumming_pattern': s.strumming_pattern,
-            'added_by_id': s.user_id,
-            'added_by': s.author.first_name
-        }, 200
+        if sort_by == 'popular':
+            songs_list.sort(key=lambda x: x['rating'], reverse=True)
+        else:
+            songs_list.sort(key=lambda x: x['id'], reverse=True)
+
+        return {'songs': songs_list}, 200
 
     @jwt_required()
     def post(self):
@@ -250,6 +288,26 @@ class Refresh(Resource):
         except:
             return {'message': 'Error'}, 401
 
+class RatingResource(Resource):
+    @jwt_required()
+    def post(self):
+        data = request.get_json()
+        user_id = int(get_jwt_identity())
+        song_id = data.get('song_id')
+        value = data.get('value')
+        if not (1 <= value <= 5):
+            return {'message': 'Оценка должна быть от 1 до 5'}, 400
+        existing_rating = Rating.query.filter_by(user_id=user_id, song_id=song_id).first()
+        
+        if existing_rating:
+            existing_rating.value = value
+        else:
+            new_rating = Rating(user_id=user_id, song_id=song_id, value=value)
+            db.session.add(new_rating)
+        db.session.commit()
+        return {'message': 'Голос учтен'}, 200
+
+api.add_resource(RatingResource, '/api/rate')
 api.add_resource(Refresh, '/api/refresh')
 api.add_resource(CommentResource, '/api/comments')
 
@@ -262,4 +320,4 @@ api.add_resource(Logout, '/api/logout')
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
-    app.run(debug=True)
+    app.run(debug=True, host='0.0.0.0', port=5000)

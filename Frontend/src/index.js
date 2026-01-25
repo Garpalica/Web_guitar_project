@@ -14,7 +14,8 @@ instance.interceptors.response.use(
     if (
       error.response &&
       error.response.status === 401 &&
-      !originalRequest._retry
+      !originalRequest._retry &&
+      originalRequest.url !== "/refresh"
     ) {
       originalRequest._retry = true;
       try {
@@ -22,7 +23,6 @@ instance.interceptors.response.use(
         return instance(originalRequest);
       } catch (refreshError) {
         localStorage.clear();
-        window.location.href = "/";
         return Promise.reject(refreshError);
       }
     }
