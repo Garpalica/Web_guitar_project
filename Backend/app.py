@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, make_response
+from flask import Flask, request, jsonify, make_response,send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 from flask_restful import Api, Resource
@@ -9,9 +9,11 @@ from flask_jwt_extended import (
     set_refresh_cookies, unset_jwt_cookies, get_jwt
 )
 from flask_cors import CORS 
+import os
+from functools import wraps
 
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": ["http://localhost:5173"]}}, supports_credentials=True)
+CORS(app, resources={r"/api/*": {"origins": ["http://localhost:5173", "http://localhost:5174"]}}, supports_credentials=True)
 
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///guitar_base.db'
 app.config['JWT_SECRET_KEY'] = '834g93gb9ug34u9njscd234kmpiq3jipwuo3v55vu94fpi53foqfm3ipw7vu959uw'
@@ -75,6 +77,18 @@ class Rating(db.Model):
     value = db.Column(db.Integer, nullable=False)
     __table_args__ = (db.UniqueConstraint('user_id', 'song_id', name='unique_user_song_rating'),)
 
+def admin_required():
+    def wrapper(fn):
+        @wraps(fn)
+        @jwt_required()
+        def decorator(*args, **kwargs):
+            user_id = get_jwt_identity()
+            user = User.query.get(user_id)
+            if not user or user.role != 'admin':
+                return {'message': 'Доступ запрещен. Требуются права администратора!'}, 403
+            return fn(*args, **kwargs)
+        return decorator
+    return wrapper
 
 class Register(Resource):
     def post(self):
@@ -288,6 +302,45 @@ class Refresh(Resource):
         except:
             return {'message': 'Error'}, 401
 
+class AdminUsers(Resource):
+    @admin_required()
+    def get(self):
+        users = User.query.all()
+        return {'users': [{
+            'id': u.id,
+            'first_name': u.first_name,
+            'email': u.email,
+            'role': u.role
+        } for u in users]}, 200
+
+    @admin_required()
+    def put(self):
+        data = request.get_json()
+        user = User.query.get(data['user_id'])
+        if not user: return {'message': 'Пользователь не найден'}, 404
+        
+        user.role = data['new_role']
+        db.session.commit()
+        return {'message': f'Роль пользователя {user.email} изменена на {user.role}'}, 200
+
+class AdminDeleteSong(Resource):
+    @admin_required()
+    def delete(self, song_id):
+        song = Song.query.get(song_id)
+        if not song: return {'message': 'Не найдено'}, 404
+        db.session.delete(song)
+        db.session.commit()
+        return {'message': 'Разбор удален администратором'}, 200
+
+class AdminDeleteComment(Resource):
+    @admin_required()
+    def delete(self, comment_id):
+        comment = Comment.query.get(comment_id)
+        if not comment: return {'message': 'Не найдено'}, 404
+        db.session.delete(comment)
+        db.session.commit()
+        return {'message': 'Комментарий удален администратором'}, 200
+
 class RatingResource(Resource):
     @jwt_required()
     def post(self):
@@ -308,6 +361,9 @@ class RatingResource(Resource):
         return {'message': 'Голос учтен'}, 200
 
 api.add_resource(RatingResource, '/api/rate')
+api.add_resource(AdminUsers, '/api/admin/users')
+api.add_resource(AdminDeleteSong, '/api/admin/songs/<int:song_id>')
+api.add_resource(AdminDeleteComment, '/api/admin/comments/<int:comment_id>')
 api.add_resource(Refresh, '/api/refresh')
 api.add_resource(CommentResource, '/api/comments')
 
