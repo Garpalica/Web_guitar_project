@@ -11,6 +11,7 @@ from flask_jwt_extended import (
 from flask_cors import CORS 
 import os
 from functools import wraps
+from datetime import timedelta  
 
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": ["http://localhost:5173", "http://localhost:5174"]}}, supports_credentials=True)
@@ -20,6 +21,7 @@ app.config['JWT_SECRET_KEY'] = '834g93gb9ug34u9njscd234kmpiq3jipwuo3v55vu94fpi53
 app.config['JWT_TOKEN_LOCATION'] = ['cookies']
 app.config['JWT_ACCESS_COOKIE_NAME'] = 'access_token_cookie'
 app.config['JWT_COOKIE_CSRF_PROTECT'] = False
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(seconds=10)
 
 api = Api(app)
 jwt = JWTManager(app)

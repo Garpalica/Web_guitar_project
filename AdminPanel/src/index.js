@@ -5,33 +5,76 @@ const instance = axios.create({
   withCredentials: true,
 });
 
-instance.interceptors.response.use(
-  (response) => {
-    return response;
-  },
-  async (error) => {
-    const originalRequest = error.config;
-    if (
-      error.response &&
-      error.response.status === 401 &&
-      !originalRequest._retry &&
-      originalRequest.url !== "/refresh"
-    ) {
-      originalRequest._retry = true;
+export async function Axios_Refresh() {
+  try {
+    await instance.post("/refresh");
+    return true;
+  } catch (error) {
+    localStorage.clear();
+    return false;
+  }
+}
 
-      try {
-        await instance.post("/refresh");
-        return instance(originalRequest);
-      } catch (refreshError) {
-        localStorage.clear();
-        return Promise.reject(refreshError);
+export async function Axios_Get(url) {
+  try {
+    const response = await instance.get(url);
+    return response;
+  } catch (error) {
+    if (error.response && error.response.status === 401) {
+      const refreshed = await Axios_Refresh();
+      if (refreshed) {
+        const new_response = await instance.get(url);
+        return new_response;
       }
     }
-    return Promise.reject(error);
-  },
-);
-export const Axios_Get = async (url) => instance.get(url);
-export const Axios_Post = async (url, data) => instance.post(url, data);
-export const Axios_Put = async (url, data) => instance.put(url, data);
-export const Axios_Delete = async (url, data) =>
-  instance.delete(url, { data: data });
+    throw error;
+  }
+}
+
+export async function Axios_Post(url, data) {
+  try {
+    const response = await instance.post(url, data);
+    return response;
+  } catch (error) {
+    if (error.response && error.response.status === 401) {
+      const refreshed = await Axios_Refresh();
+      if (refreshed) {
+        const new_response = await instance.post(url, data);
+        return new_response;
+      }
+    }
+    throw error;
+  }
+}
+
+export async function Axios_Put(url, data) {
+  try {
+    const response = await instance.put(url, data);
+    return response;
+  } catch (error) {
+    if (error.response && error.response.status === 401) {
+      const refreshed = await Axios_Refresh();
+      if (refreshed) {
+        const new_response = await instance.put(url, data);
+        return new_response;
+      }
+    }
+    throw error;
+  }
+}
+
+export async function Axios_Delete(url, data) {
+  try {
+    const response = await instance.delete(url, { data: data });
+    return response;
+  } catch (error) {
+    if (error.response && error.response.status === 401) {
+      const refreshed = await Axios_Refresh();
+      if (refreshed) {
+        const new_response = await instance.delete(url, { data: data });
+        return new_response;
+      }
+    }
+    throw error;
+  }
+}
