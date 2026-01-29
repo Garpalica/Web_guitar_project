@@ -1,0 +1,52 @@
+#       PYTHON (Backend)
+# Виртуальное окружение (самое важное!)
+venv/
+env/
+.env
+
+# Байт-код и кеш питона (мусор)
+__pycache__/
+*.py[cod]
+*$py.class
+
+# База данных Flask (не грузим локальную БД)
+instance/
+*.db
+*.sqlite3
+
+# Логи ошибок
+*.log
+
+#    NODE.JS (Frontend)
+# Зависимости (очень тяжелая папка, восстанавливается через npm install)
+node_modules/
+
+# Сборка проекта (создается через npm run build)
+dist/
+dist-ssr/
+
+# Логи npm/yarn
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Локальные файлы настройки окружения
+.env.local
+.env.*.local
+
+#      СИСТЕМНЫЕ / IDE
+# Настройки редактора VS Code (можно оставить, если работаешь один, но часто убирают)
+.vscode/*
+!.vscode/extensions.json
+
+# Настройки JetBrains (PyCharm, WebStorm)
+.idea/
+
+# Файлы операционных систем
+.DS_Store
+Thumbs.db
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
