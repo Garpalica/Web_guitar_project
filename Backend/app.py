@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, make_response,send_from_directory
+from flask import Flask, request, jsonify, make_response,send_from_directory,render_template
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 from flask_restful import Api, Resource
@@ -11,21 +11,64 @@ from flask_jwt_extended import (
 from flask_cors import CORS 
 import os
 from functools import wraps
-from datetime import timedelta  
+from datetime import timedelta 
+from jwt.exceptions import ExpiredSignatureError 
 
-app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": ["http://localhost:5173", "http://localhost:5174"]}}, supports_credentials=True)
+static_folder = os.path.join(os.getcwd(), 'client', 'assets')
+template_folder = os.path.join(os.getcwd(), 'client')
+
+app = Flask(__name__, static_folder=static_folder, template_folder=template_folder)
+CORS(app, origins = ["http://localhost:5173", "http://localhost:5174"], supports_credentials=True)
 
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///guitar_base.db'
 app.config['JWT_SECRET_KEY'] = '834g93gb9ug34u9njscd234kmpiq3jipwuo3v55vu94fpi53foqfm3ipw7vu959uw'
-app.config['JWT_TOKEN_LOCATION'] = ['cookies']
+app.config["JWT_TOKEN_LOCATION"] = ["headers", "cookies"]
+app.config["JWT_COOKIE_SECURE"] = False
+app.config["JWT_COOKIE_SAMESITE"] = "None"
+app.config["JWT_COOKIE_SAMESITE"] = 'Lax'
 app.config['JWT_ACCESS_COOKIE_NAME'] = 'access_token_cookie'
-app.config['JWT_COOKIE_CSRF_PROTECT'] = False
+app.config['JWT_REFRESH_COOKIE_NAME'] = 'refresh_token_cookie'
+app.config["JWT_COOKIE_CSRF_PROTECT"] = False
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(seconds=10)
+app.config["JWT_REFRESH_TOKEN_EXPIRES"] = timedelta(days=30)
+app.config['PROPAGATE_EXCEPTIONS'] = True
 
 api = Api(app)
 jwt = JWTManager(app)
 db = SQLAlchemy(app)
+
+
+@app.route('/')
+def serve_index():
+    if not os.path.exists(os.path.join(template_folder, 'index.html')):
+        return "Серверная часть запущена в режиме разработки. Интерфейс размещен отдельно"
+    return render_template('index.html')
+
+@app.route('/<path:path>')
+def catch_all(path):
+    if path.startswith('api'):
+        return "Не найдено", 404
+    if os.path.exists(os.path.join(template_folder, 'index.html')):
+        return render_template('index.html')
+    return "Не найдено", 404
+
+@jwt.expired_token_loader
+def expired_token_callback(jwt_header, jwt_payload):
+    return jsonify({
+        "msg": "The token has expired",
+        "error": "token_expired"
+    }), 401
+
+@jwt.invalid_token_loader
+def invalid_token_callback(error):
+    return jsonify({
+        "msg": "Signature verification failed",
+        "error": "invalid_token"
+    }), 401
+
+@app.errorhandler(ExpiredSignatureError)
+def handle_expired_error(e):
+    return jsonify({"msg": "Token has expired", "error": "token_expired"}), 401
 
 @jwt.unauthorized_loader
 def unauthorized_callback(error):
@@ -96,7 +139,7 @@ class Register(Resource):
     def post(self):
         data = request.get_json()
         if User.query.filter_by(email=data['email']).first():
-            return {'message': 'Пользователь уже существует'}, 400
+            return {'message': 'Пользователь уже существует чик'}, 400
         
         role = 'user'
         if data['email'] == 'admin@admin.com':
@@ -375,7 +418,15 @@ api.add_resource(Register, '/api/register')
 api.add_resource(Login, '/api/login')
 api.add_resource(Logout, '/api/logout')
 
+basedir = os.path.abspath(os.path.dirname(__file__))
+instance_path = os.path.join(basedir, 'instance')
+if not os.path.exists(instance_path):
+    try:
+        os.makedirs(instance_path)
+    except OSError:
+        pass
+with app.app_context():
+    db.create_all()
+
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
     app.run(debug=True, host='0.0.0.0', port=5000)

@@ -230,7 +230,7 @@ select {
   gap: 20px;
 }
 .song_card {
-  background-color: white;
+  background-color: rgb(255, 255, 255);
   border: 1px solid #ddd;
   border-radius: 15px;
   padding: 20px;

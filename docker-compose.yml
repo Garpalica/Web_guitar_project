@@ -1,0 +1,20 @@
+version: "3.8"
+services:
+  app:
+    build: .
+    container_name: guitar-app-prod
+    ports:
+      - "5000:5000"
+    volumes:
+      - app_data:/app/instance
+    environment:
+      - FLASK_ENV=production
+  admin:
+    build:
+      context: .
+      dockerfile: Dockerfile.admin
+    container_name: guitar-admin-prod
+    ports:
+      - "5174:5174"
+volumes:
+  app_data:
